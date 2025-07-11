@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -135,7 +134,8 @@ const Dashboard = ({ onViewChange }: DashboardProps) => {
       if (error) {
         console.error('Error fetching stats:', error);
       } else {
-        setStats(data || {});
+        // Cast the JSON data to UserStats
+        setStats((data as UserStats) || {});
       }
     } catch (error) {
       console.error('Error fetching stats:', error);

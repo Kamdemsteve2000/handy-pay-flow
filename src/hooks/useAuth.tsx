@@ -47,7 +47,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return null;
       }
 
-      return data;
+      // Cast user_type to correct type
+      return {
+        ...data,
+        user_type: data.user_type as 'client' | 'provider'
+      } as Profile;
     } catch (error) {
       console.error('Error fetching profile:', error);
       return null;
