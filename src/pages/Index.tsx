@@ -3,31 +3,41 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Search, CreditCard, Shield, Star, Calendar, Users, Wallet, CheckCircle } from "lucide-react";
 import AuthModal from "@/components/AuthModal";
 import Dashboard from "@/components/Dashboard";
 import ServiceSearch from "@/components/ServiceSearch";
 import ProviderProfile from "@/components/ProviderProfile";
+import { AuthProvider, useAuth } from "@/hooks/useAuth";
 
-const Index = () => {
+const IndexContent = () => {
+  const { user, profile, loading } = useAuth();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [currentUser, setCurrentUser] = useState<any>(null);
   const [activeView, setActiveView] = useState<'home' | 'dashboard' | 'search' | 'profile'>('home');
 
-  const handleLogin = (userData: any) => {
-    setCurrentUser(userData);
-    setIsAuthModalOpen(false);
+  // Redirect authenticated users to dashboard
+  if (user && profile && activeView === 'home') {
     setActiveView('dashboard');
-  };
+  }
 
-  const handleLogout = () => {
-    setCurrentUser(null);
-    setActiveView('home');
-  };
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center mx-auto mb-4">
+            <Wallet className="h-8 w-8 text-white" />
+          </div>
+          <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+            HandyPay
+          </h1>
+          <p className="text-gray-600 mt-2">Chargement...</p>
+        </div>
+      </div>
+    );
+  }
 
-  if (currentUser && activeView === 'dashboard') {
-    return <Dashboard user={currentUser} onLogout={handleLogout} onViewChange={setActiveView} />;
+  if (user && profile && activeView === 'dashboard') {
+    return <Dashboard onViewChange={setActiveView} />;
   }
 
   if (activeView === 'search') {
@@ -56,14 +66,18 @@ const Index = () => {
             <nav className="hidden md:flex items-center space-x-6">
               <Button variant="ghost" onClick={() => setActiveView('search')}>Trouver un service</Button>
               <Button variant="ghost" onClick={() => setActiveView('profile')}>Devenir prestataire</Button>
-              <Button onClick={() => setIsAuthModalOpen(true)}>Se connecter</Button>
+              {user ? (
+                <Button onClick={() => setActiveView('dashboard')}>Tableau de bord</Button>
+              ) : (
+                <Button onClick={() => setIsAuthModalOpen(true)}>Se connecter</Button>
+              )}
             </nav>
 
             <Button 
               className="md:hidden"
-              onClick={() => setIsAuthModalOpen(true)}
+              onClick={() => user ? setActiveView('dashboard') : setIsAuthModalOpen(true)}
             >
-              Connexion
+              {user ? 'Dashboard' : 'Connexion'}
             </Button>
           </div>
         </div>
@@ -269,9 +283,16 @@ const Index = () => {
       <AuthModal 
         isOpen={isAuthModalOpen} 
         onClose={() => setIsAuthModalOpen(false)}
-        onLogin={handleLogin}
       />
     </div>
+  );
+};
+
+const Index = () => {
+  return (
+    <AuthProvider>
+      <IndexContent />
+    </AuthProvider>
   );
 };
 

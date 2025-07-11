@@ -5,54 +5,62 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import { User, Briefcase, Mail, Lock, Phone } from "lucide-react";
-import { toast } from "sonner";
+import { useAuth } from "@/hooks/useAuth";
 
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onLogin: (userData: any) => void;
 }
 
-const AuthModal = ({ isOpen, onClose, onLogin }: AuthModalProps) => {
-  const [isLoading, setIsLoading] = useState(false);
+const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
+  const { signIn, signUp, loading } = useAuth();
   const [formData, setFormData] = useState({
     email: "",
     password: "",
     name: "",
     phone: "",
-    userType: "client"
+    userType: "client" as "client" | "provider"
   });
+  const [authLoading, setAuthLoading] = useState(false);
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleLogin = async (isSignUp: boolean = false) => {
-    setIsLoading(true);
-    
-    // Simulation d'authentification
-    setTimeout(() => {
-      const userData = {
-        id: Math.random().toString(36).substr(2, 9),
-        email: formData.email,
-        name: formData.name || formData.email.split('@')[0],
-        phone: formData.phone,
-        userType: formData.userType,
-        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${formData.email}`,
-        createdAt: new Date().toISOString(),
-        isVerified: true,
-        rating: formData.userType === 'provider' ? 4.8 : null,
-        completedServices: formData.userType === 'provider' ? Math.floor(Math.random() * 50) + 10 : Math.floor(Math.random() * 20),
-        balance: Math.floor(Math.random() * 1000) + 100
-      };
+  const handleLogin = async () => {
+    if (!formData.email || !formData.password) {
+      return;
+    }
 
-      toast.success(isSignUp ? "Compte créé avec succès !" : "Connexion réussie !");
-      onLogin(userData);
-      setIsLoading(false);
-    }, 1500);
+    setAuthLoading(true);
+    const { error } = await signIn(formData.email, formData.password);
+    
+    if (!error) {
+      onClose();
+    }
+    setAuthLoading(false);
+  };
+
+  const handleSignUp = async () => {
+    if (!formData.email || !formData.password || !formData.name) {
+      return;
+    }
+
+    setAuthLoading(true);
+    const { error } = await signUp(
+      formData.email, 
+      formData.password, 
+      formData.name, 
+      formData.userType,
+      formData.phone
+    );
+    
+    if (!error) {
+      onClose();
+    }
+    setAuthLoading(false);
   };
 
   return (
@@ -104,10 +112,10 @@ const AuthModal = ({ isOpen, onClose, onLogin }: AuthModalProps) => {
 
               <Button 
                 className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700" 
-                onClick={() => handleLogin(false)}
-                disabled={isLoading}
+                onClick={handleLogin}
+                disabled={authLoading || loading}
               >
-                {isLoading ? "Connexion..." : "Se connecter"}
+                {authLoading ? "Connexion..." : "Se connecter"}
               </Button>
             </div>
           </TabsContent>
@@ -202,10 +210,10 @@ const AuthModal = ({ isOpen, onClose, onLogin }: AuthModalProps) => {
 
               <Button 
                 className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700" 
-                onClick={() => handleLogin(true)}
-                disabled={isLoading}
+                onClick={handleSignUp}
+                disabled={authLoading || loading}
               >
-                {isLoading ? "Création du compte..." : "Créer mon compte"}
+                {authLoading ? "Création du compte..." : "Créer mon compte"}
               </Button>
             </div>
           </TabsContent>
