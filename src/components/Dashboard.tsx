@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,7 +14,7 @@ import {
   TrendingUp,
   Wallet,
   Send,
-  Receive,
+  ArrowDownLeft,
   Search,
   Settings,
   LogOut,
@@ -296,7 +295,7 @@ const Dashboard = ({ user, onLogout, onViewChange }: DashboardProps) => {
                         }`}>
                           {transaction.type === 'payment' ? 
                             <Send className={`h-5 w-5 text-red-600`} /> : 
-                            <Receive className={`h-5 w-5 text-green-600`} />
+                            <ArrowDownLeft className={`h-5 w-5 text-green-600`} />
                           }
                         </div>
                         <div>
