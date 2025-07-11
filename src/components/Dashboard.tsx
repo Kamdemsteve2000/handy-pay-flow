@@ -19,13 +19,15 @@ import {
   Settings,
   LogOut,
   CheckCircle,
-  Loader2
+  Loader2,
+  Bell,
+  MessageSquare
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-type ViewType = 'home' | 'dashboard' | 'search' | 'profile';
+type ViewType = 'home' | 'dashboard' | 'search' | 'profile' | 'wallet' | 'notifications';
 
 interface DashboardProps {
   onViewChange: (view: ViewType) => void;
@@ -52,6 +54,17 @@ interface Booking {
   provider_profile?: { full_name: string };
 }
 
+interface ServiceRequest {
+  id: string;
+  title: string;
+  description: string;
+  budget: number;
+  status: string;
+  created_at: string;
+  client_profile?: { full_name: string };
+  provider_profile?: { full_name: string };
+}
+
 interface UserStats {
   completed_services?: number;
   average_rating?: number;
@@ -67,8 +80,10 @@ const Dashboard = ({ onViewChange }: DashboardProps) => {
   const [activeTab, setActiveTab] = useState("overview");
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [serviceRequests, setServiceRequests] = useState<ServiceRequest[]>([]);
   const [stats, setStats] = useState<UserStats>({});
   const [loading, setLoading] = useState(true);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
 
   const fetchTransactions = async () => {
     if (!user) return;
@@ -87,12 +102,56 @@ const Dashboard = ({ onViewChange }: DashboardProps) => {
 
       if (error) {
         console.error('Error fetching transactions:', error);
-        toast.error('Erreur lors du chargement des transactions');
       } else {
         setTransactions(data || []);
       }
     } catch (error) {
       console.error('Error fetching transactions:', error);
+    }
+  };
+
+  const fetchServiceRequests = async () => {
+    if (!user) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('service_requests')
+        .select(`
+          *,
+          client_profile:profiles!client_id(full_name),
+          provider_profile:profiles!provider_id(full_name)
+        `)
+        .or(`client_id.eq.${user.id},provider_id.eq.${user.id}`)
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      if (error) {
+        console.error('Error fetching service requests:', error);
+      } else {
+        setServiceRequests(data || []);
+      }
+    } catch (error) {
+      console.error('Error fetching service requests:', error);
+    }
+  };
+
+  const fetchNotificationCount = async () => {
+    if (!user) return;
+
+    try {
+      const { count, error } = await supabase
+        .from('notifications')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('read', false);
+
+      if (error) {
+        console.error('Error fetching notification count:', error);
+      } else {
+        setUnreadNotifications(count || 0);
+      }
+    } catch (error) {
+      console.error('Error fetching notification count:', error);
     }
   };
 
@@ -114,7 +173,6 @@ const Dashboard = ({ onViewChange }: DashboardProps) => {
 
       if (error) {
         console.error('Error fetching bookings:', error);
-        toast.error('Erreur lors du chargement des réservations');
       } else {
         setBookings(data || []);
       }
@@ -134,7 +192,6 @@ const Dashboard = ({ onViewChange }: DashboardProps) => {
       if (error) {
         console.error('Error fetching stats:', error);
       } else {
-        // Cast the JSON data to UserStats
         setStats((data as UserStats) || {});
       }
     } catch (error) {
@@ -149,7 +206,9 @@ const Dashboard = ({ onViewChange }: DashboardProps) => {
         await Promise.all([
           fetchTransactions(),
           fetchBookings(),
-          fetchStats()
+          fetchServiceRequests(),
+          fetchStats(),
+          fetchNotificationCount()
         ]);
         setLoading(false);
       }
@@ -202,7 +261,7 @@ const Dashboard = ({ onViewChange }: DashboardProps) => {
                 className="text-gray-600 hover:text-gray-900"
               >
                 <ArrowLeft className="h-4 w-4 mr-2" />
-                Retour
+                Accueil
               </Button>
               
               <div className="flex items-center space-x-3">
@@ -229,6 +288,33 @@ const Dashboard = ({ onViewChange }: DashboardProps) => {
                 <Search className="h-4 w-4 mr-2" />
                 Chercher
               </Button>
+              
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={() => onViewChange('wallet')}
+              >
+                <Wallet className="h-4 w-4 mr-2" />
+                Portefeuille
+              </Button>
+              
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={() => onViewChange('notifications')}
+                className="relative"
+              >
+                <Bell className="h-4 w-4" />
+                {unreadNotifications > 0 && (
+                  <Badge 
+                    variant="destructive" 
+                    className="absolute -top-1 -right-1 text-xs h-5 w-5 p-0 flex items-center justify-center"
+                  >
+                    {unreadNotifications}
+                  </Badge>
+                )}
+              </Button>
+              
               <Button variant="ghost" size="sm">
                 <Settings className="h-4 w-4" />
               </Button>
@@ -254,7 +340,7 @@ const Dashboard = ({ onViewChange }: DashboardProps) => {
                     {formatAmount(
                       profile.user_type === 'provider' 
                         ? (stats.total_earnings || 0)
-                        : 500 // Solde simulé pour les clients
+                        : 500
                     )}
                   </p>
                 </div>
@@ -333,8 +419,11 @@ const Dashboard = ({ onViewChange }: DashboardProps) => {
 
         {/* Main Content */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3 lg:w-fit">
+          <TabsList className="grid w-full grid-cols-4 lg:w-fit">
             <TabsTrigger value="overview">Vue d'ensemble</TabsTrigger>
+            <TabsTrigger value="requests">
+              {profile.user_type === 'provider' ? 'Demandes reçues' : 'Mes demandes'}
+            </TabsTrigger>
             <TabsTrigger value="transactions">Transactions</TabsTrigger>
             <TabsTrigger value="services">
               {profile.user_type === 'provider' ? 'Mes services' : 'Mes réservations'}
@@ -348,6 +437,43 @@ const Dashboard = ({ onViewChange }: DashboardProps) => {
               </div>
             ) : (
               <div className="grid lg:grid-cols-2 gap-6">
+                {/* Recent Service Requests */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center">
+                      <MessageSquare className="h-5 w-5 mr-2" />
+                      {profile.user_type === 'provider' ? 'Demandes reçues' : 'Demandes envoyées'}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {serviceRequests.length === 0 ? (
+                      <p className="text-gray-500 text-center py-4">Aucune demande</p>
+                    ) : (
+                      serviceRequests.slice(0, 3).map((request) => (
+                        <div key={request.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                          <div>
+                            <p className="font-medium text-gray-900">{request.title}</p>
+                            <p className="text-sm text-gray-600">
+                              {profile.user_type === 'client' 
+                                ? request.provider_profile?.full_name 
+                                : request.client_profile?.full_name
+                              } • {formatDate(request.created_at)}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-bold text-gray-900">{formatAmount(request.budget)}</p>
+                            <Badge variant={request.status === 'pending' ? 'secondary' : 'default'}>
+                              {request.status === 'pending' ? 'En attente' : 
+                               request.status === 'accepted' ? 'Accepté' : 
+                               request.status === 'completed' ? 'Terminé' : 'Refusé'}
+                            </Badge>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </CardContent>
+                </Card>
+
                 {/* Recent Transactions */}
                 <Card>
                   <CardHeader>
@@ -391,45 +517,78 @@ const Dashboard = ({ onViewChange }: DashboardProps) => {
                     )}
                   </CardContent>
                 </Card>
-
-                {/* Upcoming Bookings */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center">
-                      <Calendar className="h-5 w-5 mr-2" />
-                      {profile.user_type === 'provider' ? 'Prochains rendez-vous' : 'Mes réservations'}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {bookings.length === 0 ? (
-                      <p className="text-gray-500 text-center py-4">Aucune réservation</p>
-                    ) : (
-                      bookings.slice(0, 3).map((booking) => (
-                        <div key={booking.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                          <div>
-                            <p className="font-medium text-gray-900">{booking.service.title}</p>
-                            <p className="text-sm text-gray-600">
-                              {profile.user_type === 'client' 
-                                ? booking.provider_profile?.full_name 
-                                : booking.client_profile?.full_name
-                              } • {formatDate(booking.scheduled_date)}
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <p className="font-bold text-gray-900">{formatAmount(booking.service.price)}</p>
-                            <Badge variant={booking.status === 'confirmed' ? 'default' : 'secondary'}>
-                              {booking.status === 'confirmed' ? 'Confirmé' : 
-                               booking.status === 'pending' ? 'En attente' : 
-                               booking.status === 'completed' ? 'Terminé' : 'Annulé'}
-                            </Badge>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </CardContent>
-                </Card>
               </div>
             )}
+          </TabsContent>
+
+          <TabsContent value="requests" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>
+                  {profile.user_type === 'provider' ? 'Demandes reçues' : 'Mes demandes de service'}
+                </CardTitle>
+                <CardDescription>
+                  {profile.user_type === 'provider' ? 
+                    'Gérez les demandes de vos clients' : 
+                    'Suivez vos demandes de service'
+                  }
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loading ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin" />
+                  </div>
+                ) : serviceRequests.length === 0 ? (
+                  <div className="text-center py-8">
+                    <MessageSquare className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">
+                      {profile.user_type === 'provider' ? 'Aucune demande reçue' : 'Aucune demande envoyée'}
+                    </h3>
+                    <p className="text-gray-600 mb-4">
+                      {profile.user_type === 'provider' ? 
+                        'Les demandes de vos clients apparaîtront ici' :
+                        'Commencez à chercher des services pour envoyer vos premières demandes'
+                      }
+                    </p>
+                    {profile.user_type === 'client' && (
+                      <Button onClick={() => onViewChange('search')}>
+                        Chercher des services
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {serviceRequests.map((request) => (
+                      <div key={request.id} className="flex items-center justify-between p-4 border rounded-lg">
+                        <div>
+                          <p className="font-medium text-gray-900">{request.title}</p>
+                          <p className="text-sm text-gray-600 mt-1">{request.description}</p>
+                          <p className="text-sm text-gray-500 mt-1">
+                            {profile.user_type === 'client' 
+                              ? `Envoyé à ${request.provider_profile?.full_name}` 
+                              : `De ${request.client_profile?.full_name}`
+                            } • {formatDate(request.created_at)}
+                          </p>
+                        </div>
+                        <div className="text-right space-y-2">
+                          <p className="font-bold text-gray-900">{formatAmount(request.budget)}</p>
+                          <Badge variant={
+                            request.status === 'accepted' ? 'default' : 
+                            request.status === 'completed' ? 'default' : 
+                            request.status === 'rejected' ? 'destructive' : 'secondary'
+                          }>
+                            {request.status === 'pending' ? 'En attente' : 
+                             request.status === 'accepted' ? 'Accepté' : 
+                             request.status === 'completed' ? 'Terminé' : 'Refusé'}
+                          </Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="transactions" className="space-y-6">

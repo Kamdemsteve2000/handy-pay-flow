@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,20 +21,41 @@ import {
   MessageCircle,
   Phone,
   Mail,
-  CheckCircle
+  CheckCircle,
+  Loader2
 } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 
 interface ServiceSearchProps {
   onBack: () => void;
   onLogin: () => void;
 }
 
+interface Service {
+  id: string;
+  title: string;
+  description: string;
+  category: string;
+  price: number;
+  duration: number;
+  provider: {
+    id: string;
+    full_name: string;
+    avatar_url?: string;
+  };
+}
+
 const ServiceSearch = ({ onBack, onLogin }: ServiceSearchProps) => {
+  const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
-  const [selectedProvider, setSelectedProvider] = useState<any>(null);
+  const [services, setServices] = useState<Service[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [requestForm, setRequestForm] = useState({
     title: "",
     description: "",
@@ -42,70 +63,6 @@ const ServiceSearch = ({ onBack, onLogin }: ServiceSearchProps) => {
     date: "",
     time: ""
   });
-
-  // Données simulées de prestataires
-  const providers = [
-    {
-      id: 1,
-      name: "Sophie Martin",
-      specialty: "Cours particuliers",
-      category: "education",
-      rating: 4.9,
-      reviews: 127,
-      hourlyRate: 25,
-      location: "Paris 15e",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=sophie",
-      description: "Professeure de mathématiques avec 8 ans d'expérience. Spécialisée dans la préparation au bac.",
-      skills: ["Mathématiques", "Physique", "Préparation concours"],
-      availability: "Disponible",
-      completedJobs: 89
-    },
-    {
-      id: 2,
-      name: "Thomas Dubois",
-      specialty: "Développement web",
-      category: "tech",
-      rating: 4.8,
-      reviews: 94,
-      hourlyRate: 45,
-      location: "Lyon",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=thomas",
-      description: "Développeur fullstack freelance. Création de sites web et applications sur mesure.",
-      skills: ["React", "Node.js", "Python", "Design UI/UX"],
-      availability: "Occupé jusqu'au 15/01",
-      completedJobs: 156
-    },
-    {
-      id: 3,
-      name: "Marie Leroy",
-      specialty: "Réparation électronique",
-      category: "repair",
-      rating: 4.7,
-      reviews: 203,
-      hourlyRate: 35,
-      location: "Marseille",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=marie",
-      description: "Technicienne spécialisée en réparation d'ordinateurs et smartphones.",
-      skills: ["Réparation PC", "Smartphones", "Récupération données"],
-      availability: "Disponible",
-      completedJobs: 267
-    },
-    {
-      id: 4,
-      name: "Pierre Garcia",
-      specialty: "Photographie",
-      category: "creative",
-      rating: 4.9,
-      reviews: 78,
-      hourlyRate: 60,
-      location: "Toulouse",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=pierre",
-      description: "Photographe professionnel pour événements, portraits et mariages.",
-      skills: ["Mariage", "Portrait", "Événementiel", "Retouche"],
-      availability: "Disponible",
-      completedJobs: 124
-    }
-  ];
 
   const categories = [
     { id: "all", name: "Toutes catégories" },
@@ -117,26 +74,109 @@ const ServiceSearch = ({ onBack, onLogin }: ServiceSearchProps) => {
     { id: "health", name: "Santé & Bien-être" }
   ];
 
-  const filteredProviders = providers.filter(provider => {
-    const matchesSearch = provider.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         provider.specialty.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         provider.skills.some(skill => skill.toLowerCase().includes(searchQuery.toLowerCase()));
+  const fetchServices = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('services')
+        .select(`
+          *,
+          provider:profiles!provider_id(id, full_name, avatar_url)
+        `)
+        .eq('is_active', true);
+
+      if (error) {
+        console.error('Error fetching services:', error);
+        toast.error('Erreur lors du chargement des services');
+      } else {
+        setServices(data || []);
+      }
+    } catch (error) {
+      console.error('Error fetching services:', error);
+      toast.error('Erreur lors du chargement des services');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchServices();
+  }, []);
+
+  const filteredServices = services.filter(service => {
+    const matchesSearch = service.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         service.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         service.provider.full_name.toLowerCase().includes(searchQuery.toLowerCase());
     
-    const matchesCategory = selectedCategory === "all" || provider.category === selectedCategory;
+    const matchesCategory = selectedCategory === "all" || service.category === selectedCategory;
     
     return matchesSearch && matchesCategory;
   });
 
-  const handleRequestService = () => {
+  const handleRequestService = async () => {
+    if (!user) {
+      toast.error("Vous devez être connecté pour envoyer une demande");
+      onLogin();
+      return;
+    }
+
     if (!requestForm.title || !requestForm.description || !requestForm.budget) {
       toast.error("Veuillez remplir tous les champs obligatoires");
       return;
     }
 
-    toast.success("Demande envoyée avec succès ! Le prestataire va vous répondre rapidement.");
-    setIsRequestModalOpen(false);
-    setRequestForm({ title: "", description: "", budget: "", date: "", time: "" });
+    if (!selectedService) return;
+
+    setSubmitting(true);
+    try {
+      const preferredDateTime = requestForm.date && requestForm.time 
+        ? `${requestForm.date}T${requestForm.time}:00.000Z`
+        : null;
+
+      const { error } = await supabase
+        .from('service_requests')
+        .insert({
+          client_id: user.id,
+          provider_id: selectedService.provider.id,
+          service_id: selectedService.id,
+          title: requestForm.title,
+          description: requestForm.description,
+          budget: parseFloat(requestForm.budget),
+          preferred_date: preferredDateTime,
+          status: 'pending'
+        });
+
+      if (error) {
+        console.error('Error creating service request:', error);
+        toast.error('Erreur lors de l\'envoi de la demande');
+      } else {
+        // Créer une notification pour le prestataire
+        await supabase.rpc('create_notification', {
+          user_id: selectedService.provider.id,
+          title: 'Nouvelle demande de service',
+          message: `${user.email} a fait une demande pour "${requestForm.title}"`,
+          notification_type: 'service_request'
+        });
+
+        toast.success("Demande envoyée avec succès ! Le prestataire va vous répondre rapidement.");
+        setIsRequestModalOpen(false);
+        setRequestForm({ title: "", description: "", budget: "", date: "", time: "" });
+        setSelectedService(null);
+      }
+    } catch (error) {
+      console.error('Error creating service request:', error);
+      toast.error('Erreur lors de l\'envoi de la demande');
+    } finally {
+      setSubmitting(false);
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -150,7 +190,7 @@ const ServiceSearch = ({ onBack, onLogin }: ServiceSearchProps) => {
               </Button>
               <h1 className="text-xl font-bold">Rechercher un service</h1>
             </div>
-            <Button onClick={onLogin}>Se connecter</Button>
+            {!user && <Button onClick={onLogin}>Se connecter</Button>}
           </div>
         </div>
       </header>
@@ -189,29 +229,27 @@ const ServiceSearch = ({ onBack, onLogin }: ServiceSearchProps) => {
           </div>
 
           <div className="text-sm text-gray-600">
-            {filteredProviders.length} prestataire{filteredProviders.length > 1 ? 's' : ''} trouvé{filteredProviders.length > 1 ? 's' : ''}
+            {filteredServices.length} service{filteredServices.length > 1 ? 's' : ''} trouvé{filteredServices.length > 1 ? 's' : ''}
           </div>
         </div>
 
         {/* Results */}
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-          {filteredProviders.map((provider) => (
-            <Card key={provider.id} className="hover:shadow-lg transition-shadow cursor-pointer">
+          {filteredServices.map((service) => (
+            <Card key={service.id} className="hover:shadow-lg transition-shadow">
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div className="flex items-center space-x-3">
                     <Avatar className="h-12 w-12">
-                      <AvatarImage src={provider.avatar} />
-                      <AvatarFallback>{provider.name[0]}</AvatarFallback>
+                      <AvatarImage src={service.provider.avatar_url} />
+                      <AvatarFallback>{service.provider.full_name[0]}</AvatarFallback>
                     </Avatar>
                     <div>
-                      <h3 className="font-semibold">{provider.name}</h3>
-                      <p className="text-sm text-gray-600">{provider.specialty}</p>
+                      <h3 className="font-semibold">{service.provider.full_name}</h3>
+                      <p className="text-sm text-gray-600">{service.title}</p>
                     </div>
                   </div>
-                  <Badge variant={provider.availability === "Disponible" ? "default" : "secondary"}>
-                    {provider.availability === "Disponible" ? "Dispo" : "Occupé"}
-                  </Badge>
+                  <Badge variant="default">Disponible</Badge>
                 </div>
               </CardHeader>
 
@@ -219,48 +257,44 @@ const ServiceSearch = ({ onBack, onLogin }: ServiceSearchProps) => {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-1">
                     <Star className="h-4 w-4 text-yellow-500 fill-current" />
-                    <span className="font-medium">{provider.rating}</span>
-                    <span className="text-sm text-gray-500">({provider.reviews} avis)</span>
+                    <span className="font-medium">4.8</span>
+                    <span className="text-sm text-gray-500">(25 avis)</span>
                   </div>
                   <div className="text-right">
-                    <span className="text-lg font-bold">€{provider.hourlyRate}</span>
+                    <span className="text-lg font-bold">€{service.price}</span>
                     <span className="text-sm text-gray-500">/h</span>
                   </div>
                 </div>
 
-                <div className="flex items-center space-x-4 text-sm text-gray-600">
-                  <div className="flex items-center space-x-1">
-                    <MapPin className="h-4 w-4" />
-                    <span>{provider.location}</span>
-                  </div>
-                  <div className="flex items-center space-x-1">
-                    <CheckCircle className="h-4 w-4" />
-                    <span>{provider.completedJobs} services</span>
-                  </div>
+                <div className="flex items-center space-x-1">
+                  <Clock className="h-4 w-4 text-gray-400" />
+                  <span className="text-sm text-gray-600">{service.duration} min</span>
                 </div>
 
                 <p className="text-sm text-gray-600 line-clamp-2">
-                  {provider.description}
+                  {service.description}
                 </p>
 
-                <div className="flex flex-wrap gap-1">
-                  {provider.skills.slice(0, 3).map((skill, index) => (
-                    <Badge key={index} variant="outline" className="text-xs">
-                      {skill}
-                    </Badge>
-                  ))}
-                  {provider.skills.length > 3 && (
-                    <Badge variant="outline" className="text-xs">
-                      +{provider.skills.length - 3}
-                    </Badge>
-                  )}
-                </div>
+                <Badge variant="outline" className="text-xs">
+                  {categories.find(cat => cat.id === service.category)?.name}
+                </Badge>
 
                 <div className="flex space-x-2 pt-2">
                   <Button 
                     className="flex-1" 
                     onClick={() => {
-                      setSelectedProvider(provider);
+                      if (!user) {
+                        onLogin();
+                        return;
+                      }
+                      setSelectedService(service);
+                      setRequestForm({ 
+                        title: `Demande pour ${service.title}`,
+                        description: "",
+                        budget: service.price.toString(),
+                        date: "",
+                        time: ""
+                      });
                       setIsRequestModalOpen(true);
                     }}
                   >
@@ -276,10 +310,10 @@ const ServiceSearch = ({ onBack, onLogin }: ServiceSearchProps) => {
           ))}
         </div>
 
-        {filteredProviders.length === 0 && (
+        {filteredServices.length === 0 && (
           <div className="text-center py-12">
             <Search className="h-16 w-16 mx-auto text-gray-400 mb-4" />
-            <h3 className="text-lg font-medium mb-2">Aucun prestataire trouvé</h3>
+            <h3 className="text-lg font-medium mb-2">Aucun service trouvé</h3>
             <p className="text-gray-500">Essayez de modifier vos critères de recherche.</p>
           </div>
         )}
@@ -292,16 +326,16 @@ const ServiceSearch = ({ onBack, onLogin }: ServiceSearchProps) => {
             <DialogTitle>Demander un service</DialogTitle>
           </DialogHeader>
 
-          {selectedProvider && (
+          {selectedService && (
             <div className="space-y-6">
               <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
                 <Avatar>
-                  <AvatarImage src={selectedProvider.avatar} />
-                  <AvatarFallback>{selectedProvider.name[0]}</AvatarFallback>
+                  <AvatarImage src={selectedService.provider.avatar_url} />
+                  <AvatarFallback>{selectedService.provider.full_name[0]}</AvatarFallback>
                 </Avatar>
                 <div>
-                  <h4 className="font-medium">{selectedProvider.name}</h4>
-                  <p className="text-sm text-gray-600">{selectedProvider.specialty}</p>
+                  <h4 className="font-medium">{selectedService.provider.full_name}</h4>
+                  <p className="text-sm text-gray-600">{selectedService.title}</p>
                 </div>
               </div>
 
@@ -368,12 +402,15 @@ const ServiceSearch = ({ onBack, onLogin }: ServiceSearchProps) => {
                 <Button 
                   className="flex-1"
                   onClick={handleRequestService}
+                  disabled={submitting}
                 >
+                  {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                   Envoyer la demande
                 </Button>
                 <Button 
                   variant="outline" 
                   onClick={() => setIsRequestModalOpen(false)}
+                  disabled={submitting}
                 >
                   Annuler
                 </Button>
