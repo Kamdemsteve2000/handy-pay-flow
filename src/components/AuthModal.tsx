@@ -12,9 +12,10 @@ import { useAuth } from "@/hooks/useAuth";
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onSuccess?: () => void;
 }
 
-const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
+const AuthModal = ({ isOpen, onClose, onSuccess }: AuthModalProps) => {
   const { signIn, signUp, loading } = useAuth();
   const [formData, setFormData] = useState({
     email: "",
@@ -39,6 +40,9 @@ const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
     
     if (!error) {
       onClose();
+      if (onSuccess) {
+        onSuccess();
+      }
     }
     setAuthLoading(false);
   };
@@ -59,6 +63,9 @@ const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
     
     if (!error) {
       onClose();
+      if (onSuccess) {
+        onSuccess();
+      }
     }
     setAuthLoading(false);
   };

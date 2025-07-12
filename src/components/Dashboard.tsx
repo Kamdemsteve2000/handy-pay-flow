@@ -263,7 +263,7 @@ const Dashboard = ({ onBack, onHome }: DashboardProps) => {
                         <Badge 
                           variant={
                             request.status === 'pending' ? 'default' : 
-                            request.status === 'accepted' ? 'success' : 
+                            request.status === 'accepted' ? 'secondary' : 
                             'destructive'
                           }
                         >
