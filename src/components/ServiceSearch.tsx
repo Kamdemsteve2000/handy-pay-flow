@@ -22,7 +22,9 @@ import {
   Phone,
   Mail,
   CheckCircle,
-  Loader2
+  Loader2,
+  Heart,
+  HeartOff
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -44,7 +46,15 @@ interface Service {
     id: string;
     full_name: string;
     avatar_url?: string;
+    phone?: string;
+    email?: string;
   };
+}
+
+interface Favorite {
+  id: string;
+  user_id: string;
+  service_id: string;
 }
 
 const ServiceSearch = ({ onBack, onLogin }: ServiceSearchProps) => {
@@ -52,9 +62,11 @@ const ServiceSearch = ({ onBack, onLogin }: ServiceSearchProps) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [services, setServices] = useState<Service[]>([]);
+  const [favorites, setFavorites] = useState<Favorite[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
+  const [isContactModalOpen, setIsContactModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [requestForm, setRequestForm] = useState({
     title: "",
@@ -80,7 +92,7 @@ const ServiceSearch = ({ onBack, onLogin }: ServiceSearchProps) => {
         .from('services')
         .select(`
           *,
-          provider:profiles!provider_id(id, full_name, avatar_url)
+          provider:profiles!provider_id(id, full_name, avatar_url, phone, email)
         `)
         .eq('is_active', true);
 
@@ -98,9 +110,31 @@ const ServiceSearch = ({ onBack, onLogin }: ServiceSearchProps) => {
     }
   };
 
+  const fetchFavorites = async () => {
+    if (!user) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('favorites')
+        .select('*')
+        .eq('user_id', user.id);
+
+      if (error) {
+        console.error('Error fetching favorites:', error);
+      } else {
+        setFavorites(data || []);
+      }
+    } catch (error) {
+      console.error('Error fetching favorites:', error);
+    }
+  };
+
   useEffect(() => {
     fetchServices();
-  }, []);
+    if (user) {
+      fetchFavorites();
+    }
+  }, [user]);
 
   const filteredServices = services.filter(service => {
     const matchesSearch = service.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -111,6 +145,66 @@ const ServiceSearch = ({ onBack, onLogin }: ServiceSearchProps) => {
     
     return matchesSearch && matchesCategory;
   });
+
+  const isFavorite = (serviceId: string) => {
+    return favorites.some(fav => fav.service_id === serviceId);
+  };
+
+  const toggleFavorite = async (serviceId: string) => {
+    if (!user) {
+      toast.error("Vous devez être connecté pour ajouter aux favoris");
+      onLogin();
+      return;
+    }
+
+    const isCurrentlyFavorite = isFavorite(serviceId);
+
+    try {
+      if (isCurrentlyFavorite) {
+        const { error } = await supabase
+          .from('favorites')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('service_id', serviceId);
+
+        if (error) {
+          console.error('Error removing favorite:', error);
+          toast.error('Erreur lors de la suppression du favori');
+        } else {
+          setFavorites(prev => prev.filter(fav => fav.service_id !== serviceId));
+          toast.success('Retiré des favoris');
+        }
+      } else {
+        const { error } = await supabase
+          .from('favorites')
+          .insert({
+            user_id: user.id,
+            service_id: serviceId
+          });
+
+        if (error) {
+          console.error('Error adding favorite:', error);
+          toast.error('Erreur lors de l\'ajout aux favoris');
+        } else {
+          fetchFavorites();
+          toast.success('Ajouté aux favoris');
+        }
+      }
+    } catch (error) {
+      console.error('Error toggling favorite:', error);
+      toast.error('Erreur lors de la modification des favoris');
+    }
+  };
+
+  const handleContactProvider = (service: Service) => {
+    if (!user) {
+      toast.error("Vous devez être connecté pour contacter un prestataire");
+      onLogin();
+      return;
+    }
+    setSelectedService(service);
+    setIsContactModalOpen(true);
+  };
 
   const handleRequestService = async () => {
     if (!user) {
@@ -168,6 +262,22 @@ const ServiceSearch = ({ onBack, onLogin }: ServiceSearchProps) => {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const callProvider = (phone?: string) => {
+    if (!phone) {
+      toast.error("Numéro de téléphone non disponible");
+      return;
+    }
+    window.location.href = `tel:${phone}`;
+  };
+
+  const emailProvider = (email?: string) => {
+    if (!email) {
+      toast.error("Email non disponible");
+      return;
+    }
+    window.location.href = `mailto:${email}`;
   };
 
   if (loading) {
@@ -282,27 +392,21 @@ const ServiceSearch = ({ onBack, onLogin }: ServiceSearchProps) => {
                 <div className="flex space-x-2 pt-2">
                   <Button 
                     className="flex-1" 
-                    onClick={() => {
-                      if (!user) {
-                        onLogin();
-                        return;
-                      }
-                      setSelectedService(service);
-                      setRequestForm({ 
-                        title: `Demande pour ${service.title}`,
-                        description: "",
-                        budget: service.price.toString(),
-                        date: "",
-                        time: ""
-                      });
-                      setIsRequestModalOpen(true);
-                    }}
+                    onClick={() => handleContactProvider(service)}
                   >
                     <MessageCircle className="h-4 w-4 mr-2" />
                     Contacter
                   </Button>
-                  <Button variant="outline" size="sm">
-                    <Star className="h-4 w-4" />
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => toggleFavorite(service.id)}
+                  >
+                    {isFavorite(service.id) ? (
+                      <Heart className="h-4 w-4 fill-red-500 text-red-500" />
+                    ) : (
+                      <Heart className="h-4 w-4" />
+                    )}
                   </Button>
                 </div>
               </CardContent>
@@ -318,6 +422,82 @@ const ServiceSearch = ({ onBack, onLogin }: ServiceSearchProps) => {
           </div>
         )}
       </div>
+
+      {/* Contact Modal */}
+      <Dialog open={isContactModalOpen} onOpenChange={setIsContactModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Contacter le prestataire</DialogTitle>
+          </DialogHeader>
+
+          {selectedService && (
+            <div className="space-y-6">
+              <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+                <Avatar>
+                  <AvatarImage src={selectedService.provider.avatar_url} />
+                  <AvatarFallback>{selectedService.provider.full_name[0]}</AvatarFallback>
+                </Avatar>
+                <div>
+                  <h4 className="font-medium">{selectedService.provider.full_name}</h4>
+                  <p className="text-sm text-gray-600">{selectedService.title}</p>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <Button 
+                  className="w-full"
+                  onClick={() => {
+                    setIsContactModalOpen(false);
+                    setRequestForm({ 
+                      title: `Demande pour ${selectedService.title}`,
+                      description: "",
+                      budget: selectedService.price.toString(),
+                      date: "",
+                      time: ""
+                    });
+                    setIsRequestModalOpen(true);
+                  }}
+                >
+                  <MessageCircle className="h-4 w-4 mr-2" />
+                  Envoyer une demande de service
+                </Button>
+
+                {selectedService.provider.phone && (
+                  <Button 
+                    variant="outline" 
+                    className="w-full"
+                    onClick={() => callProvider(selectedService.provider.phone)}
+                  >
+                    <Phone className="h-4 w-4 mr-2" />
+                    Appeler: {selectedService.provider.phone}
+                  </Button>
+                )}
+
+                {selectedService.provider.email && (
+                  <Button 
+                    variant="outline" 
+                    className="w-full"
+                    onClick={() => emailProvider(selectedService.provider.email)}
+                  >
+                    <Mail className="h-4 w-4 mr-2" />
+                    Email: {selectedService.provider.email}
+                  </Button>
+                )}
+              </div>
+
+              <div className="flex space-x-3">
+                <Button 
+                  variant="outline" 
+                  className="flex-1"
+                  onClick={() => setIsContactModalOpen(false)}
+                >
+                  Fermer
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Request Service Modal */}
       <Dialog open={isRequestModalOpen} onOpenChange={setIsRequestModalOpen}>
