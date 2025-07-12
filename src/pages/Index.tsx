@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,10 +9,12 @@ import ServiceSearch from "@/components/ServiceSearch";
 import ProviderProfile from "@/components/ProviderProfile";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 
+type ViewType = 'home' | 'dashboard' | 'search' | 'profile' | 'notifications' | 'wallet' | 'contact' | 'about';
+
 const IndexContent = () => {
   const { user, profile, loading } = useAuth();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [activeView, setActiveView] = useState<'home' | 'dashboard' | 'search' | 'profile'>('home');
+  const [activeView, setActiveView] = useState<ViewType>('home');
 
   // Redirect authenticated users to dashboard
   if (user && profile && activeView === 'home') {

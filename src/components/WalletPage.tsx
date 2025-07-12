@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,6 +41,8 @@ interface Transaction {
   description: string;
   status: string;
   created_at: string;
+  sender_id?: string;
+  receiver_id?: string;
   sender_profile?: { full_name: string };
   receiver_profile?: { full_name: string };
 }
