@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -71,6 +70,7 @@ const IndexContent = () => {
       <Dashboard 
         onBack={() => setActiveView('home')}
         onHome={() => setActiveView('home')}
+        onNotifications={() => setActiveView('notifications')}
       />
     );
   }
@@ -85,7 +85,7 @@ const IndexContent = () => {
   }
 
   if (activeView === 'notifications') {
-    return <NotificationsPage onBack={() => setActiveView('home')} />;
+    return <NotificationsPage onBack={() => setActiveView('dashboard')} />;
   }
 
   if (activeView === 'wallet') {

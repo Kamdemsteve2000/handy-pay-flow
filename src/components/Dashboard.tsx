@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,7 +18,8 @@ import {
   Clock,
   MessageSquare,
   Star,
-  Loader2
+  Loader2,
+  LogOut
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -28,6 +28,7 @@ import { toast } from "sonner";
 interface DashboardProps {
   onBack: () => void;
   onHome: () => void;
+  onNotifications: () => void;
 }
 
 interface ServiceRequest {
@@ -42,8 +43,8 @@ interface ServiceRequest {
   };
 }
 
-const Dashboard = ({ onBack, onHome }: DashboardProps) => {
-  const { user, profile } = useAuth();
+const Dashboard = ({ onBack, onHome, onNotifications }: DashboardProps) => {
+  const { user, profile, signOut } = useAuth();
   const [stats, setStats] = useState<any>(null);
   const [serviceRequests, setServiceRequests] = useState<ServiceRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -117,6 +118,11 @@ const Dashboard = ({ onBack, onHome }: DashboardProps) => {
     }
   };
 
+  const handleSignOut = async () => {
+    await signOut();
+    onHome();
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -141,6 +147,14 @@ const Dashboard = ({ onBack, onHome }: DashboardProps) => {
               <Button variant="outline" onClick={onHome}>
                 <Home className="h-4 w-4 mr-2" />
                 Accueil
+              </Button>
+              <Button variant="outline" onClick={onNotifications}>
+                <Bell className="h-4 w-4 mr-2" />
+                Notifications
+              </Button>
+              <Button variant="outline" onClick={handleSignOut}>
+                <LogOut className="h-4 w-4 mr-2" />
+                Déconnexion
               </Button>
               <Avatar>
                 <AvatarImage src={profile?.avatar_url} />

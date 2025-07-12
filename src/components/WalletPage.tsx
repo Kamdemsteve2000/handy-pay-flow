@@ -18,7 +18,8 @@ import {
   CheckCircle,
   Loader2,
   ArrowUpRight,
-  ArrowDownLeft
+  ArrowDownLeft,
+  Mail
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -53,11 +54,14 @@ const WalletPage = ({ onBack }: WalletPageProps) => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [showSendDialog, setShowSendDialog] = useState(false);
+  const [showReceiveDialog, setShowReceiveDialog] = useState(false);
   const [sendMethod, setSendMethod] = useState<'link' | 'qr_code' | 'phone_number'>('link');
   const [sendAmount, setSendAmount] = useState('');
   const [sendTo, setSendTo] = useState('');
   const [sendDescription, setSendDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [paymentLink, setPaymentLink] = useState('');
+  const [qrCode, setQrCode] = useState('');
 
   const fetchWalletData = async () => {
     if (!user) return;
@@ -142,18 +146,48 @@ const WalletPage = ({ onBack }: WalletPageProps) => {
         console.error('Error creating transaction:', error);
         toast.error('Erreur lors de la création de la transaction');
       } else {
-        toast.success('Transaction créée avec succès !');
+        // Envoyer notification par email
+        await sendTransactionNotification(amount, sendDescription, 'sent');
+        toast.success('Transaction créée avec succès ! Notification envoyée par email.');
         setShowSendDialog(false);
         setSendAmount('');
         setSendTo('');
         setSendDescription('');
-        fetchWalletData(); // Rafraîchir les données
+        fetchWalletData();
       }
     } catch (error) {
       console.error('Error creating transaction:', error);
       toast.error('Erreur lors de la création de la transaction');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const generatePaymentLink = () => {
+    const link = `${window.location.origin}/payment?ref=${Date.now()}`;
+    setPaymentLink(link);
+    navigator.clipboard.writeText(link);
+    toast.success('Lien de paiement copié dans le presse-papiers !');
+  };
+
+  const generateQRCode = () => {
+    const qrData = `${window.location.origin}/payment?qr=${Date.now()}`;
+    setQrCode(qrData);
+    toast.success('QR Code généré !');
+  };
+
+  const sendTransactionNotification = async (amount: number, description: string, type: 'sent' | 'received') => {
+    try {
+      await supabase.functions.invoke('send-transaction-notification', {
+        body: {
+          amount,
+          description,
+          type,
+          userEmail: user?.email
+        }
+      });
+    } catch (error) {
+      console.error('Error sending notification:', error);
     }
   };
 
@@ -217,7 +251,11 @@ const WalletPage = ({ onBack }: WalletPageProps) => {
                 <Send className="h-4 w-4 mr-2" />
                 Envoyer
               </Button>
-              <Button variant="outline" className="text-white border-white hover:bg-white hover:text-blue-600">
+              <Button 
+                variant="outline" 
+                className="text-white border-white hover:bg-white hover:text-blue-600 flex-1"
+                onClick={() => setShowReceiveDialog(true)}
+              >
                 <Download className="h-4 w-4 mr-2" />
                 Recevoir
               </Button>
@@ -227,7 +265,7 @@ const WalletPage = ({ onBack }: WalletPageProps) => {
 
         {/* Quick Actions */}
         <div className="grid md:grid-cols-3 gap-4 mb-8">
-          <Card className="cursor-pointer hover:shadow-lg transition-shadow">
+          <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={generatePaymentLink}>
             <CardContent className="p-6 text-center">
               <Link2 className="h-8 w-8 text-blue-600 mx-auto mb-3" />
               <h3 className="font-semibold mb-2">Lien de paiement</h3>
@@ -235,7 +273,7 @@ const WalletPage = ({ onBack }: WalletPageProps) => {
             </CardContent>
           </Card>
 
-          <Card className="cursor-pointer hover:shadow-lg transition-shadow">
+          <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={generateQRCode}>
             <CardContent className="p-6 text-center">
               <QrCode className="h-8 w-8 text-green-600 mx-auto mb-3" />
               <h3 className="font-semibold mb-2">QR Code</h3>
@@ -256,11 +294,12 @@ const WalletPage = ({ onBack }: WalletPageProps) => {
         <Card>
           <CardHeader>
             <CardTitle>Historique des transactions</CardTitle>
-            <CardDescription>Vos dernières transactions</CardDescription>
+            <CardDescription>Vos dernières transactions avec notifications email</CardDescription>
           </CardHeader>
           <CardContent>
             {transactions.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
+                <Mail className="h-12 w-12 mx-auto mb-4 text-gray-300" />
                 Aucune transaction pour le moment
               </div>
             ) : (
@@ -278,12 +317,15 @@ const WalletPage = ({ onBack }: WalletPageProps) => {
                       </div>
                       <div>
                         <p className="font-medium">{transaction.description}</p>
-                        <p className="text-sm text-gray-600">
-                          {transaction.sender_id === user?.id ? 
-                            `Envoyé à ${transaction.receiver_profile?.full_name || 'Utilisateur'}` :
-                            `Reçu de ${transaction.sender_profile?.full_name || 'Utilisateur'}`
-                          } • {formatDate(transaction.created_at)}
-                        </p>
+                        <div className="flex items-center space-x-2">
+                          <p className="text-sm text-gray-600">
+                            {transaction.sender_id === user?.id ? 
+                              `Envoyé à ${transaction.receiver_profile?.full_name || 'Utilisateur'}` :
+                              `Reçu de ${transaction.sender_profile?.full_name || 'Utilisateur'}`
+                            } • {formatDate(transaction.created_at)}
+                          </p>
+                          <Mail className="h-3 w-3 text-blue-500" title="Notification envoyée" />
+                        </div>
                       </div>
                     </div>
                     <div className="text-right">
@@ -381,6 +423,7 @@ const WalletPage = ({ onBack }: WalletPageProps) => {
                 disabled={submitting}
               >
                 {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                <Send className="h-4 w-4 mr-2" />
                 Envoyer
               </Button>
               <Button 
@@ -390,6 +433,66 @@ const WalletPage = ({ onBack }: WalletPageProps) => {
               >
                 Annuler
               </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Receive Money Dialog */}
+      <Dialog open={showReceiveDialog} onOpenChange={setShowReceiveDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Recevoir de l'argent</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-6">
+            <div className="text-center">
+              <p className="text-gray-600 mb-4">Choisissez votre méthode préférée :</p>
+              
+              <div className="space-y-4">
+                <Button 
+                  variant="outline" 
+                  className="w-full"
+                  onClick={generatePaymentLink}
+                >
+                  <Link2 className="h-4 w-4 mr-2" />
+                  Générer un lien de paiement
+                </Button>
+                
+                <Button 
+                  variant="outline" 
+                  className="w-full"
+                  onClick={generateQRCode}
+                >
+                  <QrCode className="h-4 w-4 mr-2" />
+                  Générer un QR Code
+                </Button>
+              </div>
+
+              {paymentLink && (
+                <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+                  <p className="text-sm text-gray-600 mb-2">Lien de paiement :</p>
+                  <div className="flex items-center space-x-2">
+                    <Input value={paymentLink} readOnly className="text-xs" />
+                    <Button 
+                      size="sm" 
+                      onClick={() => {
+                        navigator.clipboard.writeText(paymentLink);
+                        toast.success('Lien copié !');
+                      }}
+                    >
+                      <Copy className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {qrCode && (
+                <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+                  <p className="text-sm text-gray-600 mb-2">Données QR Code :</p>
+                  <p className="text-xs font-mono bg-white p-2 rounded border">{qrCode}</p>
+                </div>
+              )}
             </div>
           </div>
         </DialogContent>
