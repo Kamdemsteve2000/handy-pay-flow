@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -324,7 +325,7 @@ const WalletPage = ({ onBack }: WalletPageProps) => {
                               `Reçu de ${transaction.sender_profile?.full_name || 'Utilisateur'}`
                             } • {formatDate(transaction.created_at)}
                           </p>
-                          <Mail className="h-3 w-3 text-blue-500" title="Notification envoyée" />
+                          <Mail className="h-3 w-3 text-blue-500" />
                         </div>
                       </div>
                     </div>
