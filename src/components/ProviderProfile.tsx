@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,20 +22,26 @@ import {
   Upload,
   CheckCircle,
   Users,
-  TrendingUp
+  TrendingUp,
+  Loader2
 } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 
 interface ProviderProfileProps {
   onBack: () => void;
+  onSuccess?: () => void;
 }
 
-const ProviderProfile = ({ onBack }: ProviderProfileProps) => {
+const ProviderProfile = ({ onBack, onSuccess }: ProviderProfileProps) => {
+  const { user, profile, updateProfile } = useAuth();
   const [activeTab, setActiveTab] = useState("create");
+  const [submitting, setSubmitting] = useState(false);
   const [profileForm, setProfileForm] = useState({
-    name: "",
-    email: "",
-    phone: "",
+    name: profile?.full_name || "",
+    email: profile?.email || "",
+    phone: profile?.phone || "",
     specialty: "",
     description: "",
     hourlyRate: "",
@@ -54,19 +59,22 @@ const ProviderProfile = ({ onBack }: ProviderProfileProps) => {
   });
 
   const specialties = [
-    "Cours particuliers",
-    "Développement web",
-    "Design graphique",
-    "Réparation électronique",
-    "Plomberie",
-    "Électricité",
-    "Ménage",
-    "Jardinage",
-    "Photographie",
-    "Traduction",
-    "Rédaction",
-    "Autre"
+    "education",
+    "tech", 
+    "repair",
+    "creative",
+    "home",
+    "health"
   ];
+
+  const specialtyLabels = {
+    education: "Cours particuliers",
+    tech: "Informatique",
+    repair: "Réparations",
+    creative: "Créatif",
+    home: "Maison",
+    health: "Santé & Bien-être"
+  };
 
   const handleInputChange = (field: string, value: any) => {
     setProfileForm(prev => ({ ...prev, [field]: value }));
@@ -102,14 +110,88 @@ const ProviderProfile = ({ onBack }: ProviderProfileProps) => {
     }));
   };
 
-  const handleSubmitProfile = () => {
+  const handleSubmitProfile = async () => {
+    if (!user) {
+      toast.error("Vous devez être connecté pour créer un profil prestataire");
+      return;
+    }
+
     if (!profileForm.name || !profileForm.email || !profileForm.specialty || !profileForm.hourlyRate) {
       toast.error("Veuillez remplir tous les champs obligatoires");
       return;
     }
 
-    toast.success("Profil créé avec succès ! Vous pouvez maintenant recevoir des demandes.");
-    // Ici, on sauvegarderait normalement le profil
+    setSubmitting(true);
+
+    try {
+      // Mettre à jour le profil utilisateur pour le marquer comme prestataire
+      const { error: profileError } = await updateProfile({
+        full_name: profileForm.name,
+        phone: profileForm.phone,
+        user_type: 'provider' as 'client' | 'provider'
+      });
+
+      if (profileError) {
+        throw profileError;
+      }
+
+      // Créer un service principal basé sur la spécialité
+      const { error: serviceError } = await supabase
+        .from('services')
+        .insert({
+          provider_id: user.id,
+          title: `${specialtyLabels[profileForm.specialty]} - ${profileForm.name}`,
+          description: profileForm.description || `Service de ${specialtyLabels[profileForm.specialty].toLowerCase()} proposé par ${profileForm.name}`,
+          category: profileForm.specialty,
+          price: parseFloat(profileForm.hourlyRate),
+          duration: 60,
+          is_active: true
+        });
+
+      if (serviceError) {
+        console.error('Error creating service:', serviceError);
+        throw new Error('Erreur lors de la création du service');
+      }
+
+      // Créer des services additionnels pour chaque compétence
+      const additionalServices = profileForm.skills
+        .filter(skill => skill.trim() !== '')
+        .map(skill => ({
+          provider_id: user.id,
+          title: skill,
+          description: `${skill} - Service proposé par ${profileForm.name}`,
+          category: profileForm.specialty,
+          price: parseFloat(profileForm.hourlyRate),
+          duration: 60,
+          is_active: true
+        }));
+
+      if (additionalServices.length > 0) {
+        const { error: additionalServicesError } = await supabase
+          .from('services')
+          .insert(additionalServices);
+
+        if (additionalServicesError) {
+          console.error('Error creating additional services:', additionalServicesError);
+          // Ne pas bloquer si l'erreur concerne seulement les services additionnels
+        }
+      }
+
+      toast.success("Profil prestataire créé avec succès ! Vous pouvez maintenant recevoir des demandes.");
+      
+      // Appeler onSuccess si fourni, sinon retourner en arrière
+      if (onSuccess) {
+        onSuccess();
+      } else {
+        onBack();
+      }
+
+    } catch (error) {
+      console.error('Error creating provider profile:', error);
+      toast.error("Erreur lors de la création du profil prestataire");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const days = [
@@ -174,6 +256,7 @@ const ProviderProfile = ({ onBack }: ProviderProfileProps) => {
                       placeholder="votre@email.com"
                       value={profileForm.email}
                       onChange={(e) => handleInputChange("email", e.target.value)}
+                      disabled
                     />
                   </div>
 
@@ -188,7 +271,7 @@ const ProviderProfile = ({ onBack }: ProviderProfileProps) => {
                   </div>
 
                   <div>
-                    <Label htmlFor="location">Localisation *</Label>
+                    <Label htmlFor="location">Localisation</Label>
                     <div className="relative">
                       <MapPin className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                       <Input
@@ -233,7 +316,7 @@ const ProviderProfile = ({ onBack }: ProviderProfileProps) => {
                       <SelectContent>
                         {specialties.map(specialty => (
                           <SelectItem key={specialty} value={specialty}>
-                            {specialty}
+                            {specialtyLabels[specialty]}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -250,6 +333,9 @@ const ProviderProfile = ({ onBack }: ProviderProfileProps) => {
                         className="pl-10"
                         value={profileForm.hourlyRate}
                         onChange={(e) => handleInputChange("hourlyRate", e.target.value)}
+                        type="number"
+                        min="0"
+                        step="0.01"
                       />
                       <span className="absolute right-3 top-3 text-gray-400">/h</span>
                     </div>
@@ -343,9 +429,14 @@ const ProviderProfile = ({ onBack }: ProviderProfileProps) => {
                 size="lg" 
                 className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
                 onClick={handleSubmitProfile}
+                disabled={submitting}
               >
-                <CheckCircle className="h-5 w-5 mr-2" />
-                Créer mon profil prestataire
+                {submitting ? (
+                  <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                ) : (
+                  <CheckCircle className="h-5 w-5 mr-2" />
+                )}
+                {submitting ? 'Création en cours...' : 'Créer mon profil prestataire'}
               </Button>
             </div>
           </TabsContent>
