@@ -390,7 +390,7 @@ const ClientDashboard = ({ onBack, onHome, onSearch }: ClientDashboardProps) => 
                 ))
               )}
             </div>
-          </TabContent>
+          </TabsContent>
         </Tabs>
       </div>
     </div>
