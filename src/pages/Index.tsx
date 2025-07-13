@@ -1,7 +1,8 @@
+
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Search, Users, CheckCircle, Star, ArrowRight } from "lucide-react";
+import { Search, Users, CheckCircle, Star, ArrowRight, Plus } from "lucide-react";
 import AuthModal from "@/components/AuthModal";
 import ServiceSearch from "@/components/ServiceSearch";
 import Dashboard from "@/components/Dashboard";
@@ -19,11 +20,6 @@ const IndexContent = () => {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [activeView, setActiveView] = useState<ViewType>('home');
   const [pendingProviderRegistration, setPendingProviderRegistration] = useState(false);
-
-  // Redirect authenticated users to dashboard
-  if (user && profile && activeView === 'home' && !pendingProviderRegistration) {
-    setActiveView('dashboard');
-  }
 
   // Handle provider registration flow
   const handleBecomeProvider = () => {
@@ -153,7 +149,12 @@ const IndexContent = () => {
             <div className="flex items-center space-x-4">
               {user ? (
                 <div className="flex items-center space-x-2">
-                  <span className="text-sm text-gray-600">Bonjour, {profile?.full_name}</span>
+                  <span className="text-sm text-gray-600">
+                    Bonjour, {profile?.full_name || user.email}
+                  </span>
+                  <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                    {profile?.user_type === 'provider' ? 'Prestataire' : 'Client'}
+                  </span>
                 </div>
               ) : (
                 <Button onClick={() => setIsAuthModalOpen(true)}>
@@ -168,32 +169,88 @@ const IndexContent = () => {
       {/* Hero Section */}
       <section className="py-20 px-4">
         <div className="container mx-auto text-center">
-          <h1 className="text-5xl font-bold mb-6 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-            Trouvez le service parfait près de chez vous
-          </h1>
-          <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
-            Connectez-vous avec des professionnels qualifiés pour tous vos besoins. 
-            Paiement sécurisé et satisfaction garantie.
-          </p>
-          
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button 
-              size="lg" 
-              className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
-              onClick={() => setActiveView('search')}
-            >
-              <Search className="mr-2 h-5 w-5" />
-              Rechercher un service
-            </Button>
-            <Button 
-              size="lg" 
-              variant="outline"
-              onClick={handleBecomeProvider}
-            >
-              <Users className="mr-2 h-5 w-5" />
-              Devenir prestataire
-            </Button>
-          </div>
+          {user ? (
+            <div className="mb-8">
+              <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                Bienvenue, {profile?.full_name || user.email} !
+              </h1>
+              <p className="text-lg text-gray-600 mb-6">
+                {profile?.user_type === 'provider' 
+                  ? 'Gérez vos services et demandes de clients' 
+                  : 'Trouvez le service parfait près de chez vous'
+                }
+              </p>
+              
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                {profile?.user_type === 'client' ? (
+                  <>
+                    <Button 
+                      size="lg" 
+                      className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+                      onClick={() => setActiveView('search')}
+                    >
+                      <Search className="mr-2 h-5 w-5" />
+                      Rechercher un service
+                    </Button>
+                    <Button 
+                      size="lg" 
+                      variant="outline"
+                      onClick={() => setActiveView('dashboard')}
+                    >
+                      Mes demandes
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button 
+                      size="lg" 
+                      className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+                      onClick={() => setActiveView('dashboard')}
+                    >
+                      Mon tableau de bord
+                    </Button>
+                    <Button 
+                      size="lg" 
+                      variant="outline"
+                      onClick={() => setActiveView('profile')}
+                    >
+                      <Plus className="mr-2 h-5 w-5" />
+                      Gérer mes services
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+          ) : (
+            <>
+              <h1 className="text-5xl font-bold mb-6 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                Trouvez le service parfait près de chez vous
+              </h1>
+              <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
+                Connectez-vous avec des professionnels qualifiés pour tous vos besoins. 
+                Paiement sécurisé et satisfaction garantie.
+              </p>
+              
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <Button 
+                  size="lg" 
+                  className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+                  onClick={() => setActiveView('search')}
+                >
+                  <Search className="mr-2 h-5 w-5" />
+                  Rechercher un service
+                </Button>
+                <Button 
+                  size="lg" 
+                  variant="outline"
+                  onClick={handleBecomeProvider}
+                >
+                  <Users className="mr-2 h-5 w-5" />
+                  Devenir prestataire
+                </Button>
+              </div>
+            </>
+          )}
         </div>
       </section>
 
@@ -251,37 +308,39 @@ const IndexContent = () => {
         </div>
       </section>
 
-      {/* CTA Section */}
-      <section className="py-16 px-4">
-        <div className="container mx-auto">
-          <Card className="bg-gradient-to-r from-blue-600 to-purple-600 border-0 text-white">
-            <CardContent className="p-12 text-center">
-              <h3 className="text-3xl font-bold mb-4">Prêt à commencer ?</h3>
-              <p className="text-blue-100 mb-8 text-lg">
-                Rejoignez des milliers d'utilisateurs qui font confiance à HandyPay
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Button 
-                  size="lg" 
-                  variant="secondary"
-                  onClick={() => setActiveView('search')}
-                >
-                  Trouver un service
-                  <ArrowRight className="ml-2 h-5 w-5" />
-                </Button>
-                <Button 
-                  size="lg" 
-                  variant="outline" 
-                  className="bg-transparent border-white text-white hover:bg-white hover:text-blue-600"
-                  onClick={handleBecomeProvider}
-                >
-                  Proposer mes services
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </section>
+      {/* CTA Section - Only show if not logged in */}
+      {!user && (
+        <section className="py-16 px-4">
+          <div className="container mx-auto">
+            <Card className="bg-gradient-to-r from-blue-600 to-purple-600 border-0 text-white">
+              <CardContent className="p-12 text-center">
+                <h3 className="text-3xl font-bold mb-4">Prêt à commencer ?</h3>
+                <p className="text-blue-100 mb-8 text-lg">
+                  Rejoignez des milliers d'utilisateurs qui font confiance à HandyPay
+                </p>
+                <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                  <Button 
+                    size="lg" 
+                    variant="secondary"
+                    onClick={() => setActiveView('search')}
+                  >
+                    Trouver un service
+                    <ArrowRight className="ml-2 h-5 w-5" />
+                  </Button>
+                  <Button 
+                    size="lg" 
+                    variant="outline" 
+                    className="bg-transparent border-white text-white hover:bg-white hover:text-blue-600"
+                    onClick={handleBecomeProvider}
+                  >
+                    Proposer mes services
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </section>
+      )}
 
       {/* Footer */}
       <footer className="bg-gray-900 text-white py-12 px-4">

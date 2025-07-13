@@ -24,6 +24,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import ClientDashboard from "./ClientDashboard";
 
 interface DashboardProps {
   onBack: () => void;
@@ -49,6 +50,17 @@ const Dashboard = ({ onBack, onHome, onNotifications }: DashboardProps) => {
   const [serviceRequests, setServiceRequests] = useState<ServiceRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("overview");
+
+  // Redirect clients to their specific dashboard
+  if (profile?.user_type === 'client') {
+    return (
+      <ClientDashboard 
+        onBack={onBack}
+        onHome={onHome}
+        onSearch={() => {}} // This will be handled by the parent component
+      />
+    );
+  }
 
   useEffect(() => {
     if (user) {
@@ -141,7 +153,7 @@ const Dashboard = ({ onBack, onHome, onNotifications }: DashboardProps) => {
               <Button variant="ghost" onClick={onBack}>
                 <ArrowLeft className="h-4 w-4" />
               </Button>
-              <h1 className="text-xl font-bold">Tableau de bord</h1>
+              <h1 className="text-xl font-bold">Tableau de bord prestataire</h1>
             </div>
             <div className="flex items-center space-x-2">
               <Button variant="outline" onClick={onHome}>
@@ -171,7 +183,7 @@ const Dashboard = ({ onBack, onHome, onNotifications }: DashboardProps) => {
             Bonjour, {profile?.full_name} !
           </h2>
           <p className="text-gray-600">
-            {profile?.user_type === 'provider' ? 'Gérez vos services et demandes' : 'Suivez vos demandes de service'}
+            Gérez vos services et demandes
           </p>
         </div>
 
@@ -198,45 +210,31 @@ const Dashboard = ({ onBack, onHome, onNotifications }: DashboardProps) => {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">
-                    {profile?.user_type === 'provider' ? stats?.completed_services || 0 : stats?.completed_bookings || 0}
+                    {stats?.completed_services || 0}
                   </div>
                 </CardContent>
               </Card>
 
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">
-                    {profile?.user_type === 'provider' ? 'Note moyenne' : 'Total dépensé'}
-                  </CardTitle>
-                  {profile?.user_type === 'provider' ? (
-                    <Star className="h-4 w-4 text-yellow-500" />
-                  ) : (
-                    <DollarSign className="h-4 w-4 text-blue-600" />
-                  )}
+                  <CardTitle className="text-sm font-medium">Note moyenne</CardTitle>
+                  <Star className="h-4 w-4 text-yellow-500" />
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">
-                    {profile?.user_type === 'provider' 
-                      ? `${stats?.average_rating || 0}/5`
-                      : `€${stats?.total_spent || 0}`
-                    }
+                    {stats?.average_rating || 0}/5
                   </div>
                 </CardContent>
               </Card>
 
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">
-                    {profile?.user_type === 'provider' ? 'Gains totaux' : 'Réservations en cours'}
-                  </CardTitle>
+                  <CardTitle className="text-sm font-medium">Gains totaux</CardTitle>
                   <DollarSign className="h-4 w-4 text-green-600" />
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">
-                    {profile?.user_type === 'provider' 
-                      ? `€${stats?.total_earnings || 0}`
-                      : stats?.pending_bookings || 0
-                    }
+                    €{stats?.total_earnings || 0}
                   </div>
                 </CardContent>
               </Card>
